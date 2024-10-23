@@ -19,11 +19,24 @@
             <h2>{{ recipe.name }}</h2>
             <p><strong>Description:</strong> {{ recipe.description }}</p>
             <h3>Ingredients</h3>
-            <ul>
-                {% for ingredient in recipe.ingredients %}
-                <li>{{ ingredient }}</li>
-                {% endfor %}
-            </ul>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Quantity</th>
+                        <th>Unit</th>
+                        <th>Ingredient</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ingredient in recipe.ingredients %}
+                    <tr>
+                        <td>{{ ingredient.quantity }}</td>
+                        <td>{{ ingredient.unit }}</td>
+                        <td>{{ ingredient.name }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             <h3>Instructions</h3>
             <ol>
                 {% for instruction in recipe.instructions %}

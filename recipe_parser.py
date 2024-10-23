@@ -1,20 +1,29 @@
-import requests
-from bs4 import BeautifulSoup
 import re
+from bs4 import BeautifulSoup
+import requests
 from dataclasses import dataclass
 from typing import List, Optional
+
+
+@dataclass
+class Ingredient:
+    quantity: Optional[str]
+    unit: Optional[str]
+    name: str
+
 
 @dataclass
 class Recipe:
     name: str
     description: Optional[str]
-    ingredients: List[str]
+    ingredients: List[Ingredient]
     instructions: List[str]
     url: str
 
+
 class RecipeParser:
     """A tool for parsing recipes from URLs."""
-    
+
     def __init__(self):
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -54,11 +63,8 @@ class RecipeParser:
         """Parse recipe from Schema.org JSON-LD data."""
         name = data.get('name', '').strip()
         description = data.get('description', '').strip()
-        
-        ingredients = data.get('recipeIngredient', [])
-        if isinstance(ingredients, str):
-            ingredients = [ingredients]
-        ingredients = [i.strip() for i in ingredients if i.strip()]
+
+        ingredients = [self._split_ingredient(i) for i in data.get('recipeIngredient', []) if self._valid_ingredient(i)]
 
         instructions = data.get('recipeInstructions', [])
         if isinstance(instructions, str):
@@ -70,100 +76,52 @@ class RecipeParser:
             ]
         instructions = [i.strip() for i in instructions if i.strip()]
 
-        return Recipe(name=name, description=description, 
-                     ingredients=ingredients, instructions=instructions, 
-                     url=url)
+        return Recipe(name=name, description=description,
+                      ingredients=ingredients, instructions=instructions,
+                      url=url)
 
     def _parse_html_recipe(self, soup: BeautifulSoup, url: str) -> Recipe:
         """Parse recipe from HTML when structured data is not available."""
-        # Try to find recipe name
-        name = ''
-        name_candidates = [
-            soup.find('h1'),
-            soup.find('title'),
-            soup.find(class_=re.compile(r'recipe.*title|title.*recipe', re.I))
-        ]
-        for candidate in name_candidates:
-            if candidate and candidate.text.strip():
-                name = candidate.text.strip()
-                break
+        name = soup.find('h1').get_text(strip=True) if soup.find('h1') else ''
+        description = soup.find('meta', {'name': 'description'})['content'].strip() if soup.find('meta', {'name': 'description'}) else ''
 
-        # Try to find description
-        description = ''
-        desc_candidates = [
-            soup.find(class_=re.compile(r'recipe.*description|description', re.I)),
-            soup.find('meta', {'name': 'description'})
-        ]
-        for candidate in desc_candidates:
-            if candidate:
-                text = candidate.get('content', candidate.text).strip()
-                if text:
-                    description = text
-                    break
-
-        # Try to find ingredients
+        # Extract ingredients
+        ingredients_section = soup.find(class_=re.compile(r'ingredient', re.I))
         ingredients = []
-        ingredients_section = soup.find(
-            ['ul', 'div'], 
-            class_=re.compile(r'ingredient', re.I)
-        )
         if ingredients_section:
-            ingredients = [
-                item.text.strip() 
-                for item in ingredients_section.find_all(['li', 'p']) 
-                if item.text.strip()
-            ]
+            for item in ingredients_section.find_all(['li', 'p']):
+                ingredient = item.text.strip()
+                if self._valid_ingredient(ingredient):
+                    ingredients.append(self._split_ingredient(ingredient))
 
-        # Try to find instructions
+        # Extract instructions
+        instructions_section = soup.find(class_=re.compile(r'instruction|direction|method', re.I))
         instructions = []
-        instructions_section = soup.find(
-            ['ol', 'div'], 
-            class_=re.compile(r'instruction|direction|method', re.I)
-        )
         if instructions_section:
-            instructions = [
-                item.text.strip() 
-                for item in instructions_section.find_all(['li', 'p']) 
-                if item.text.strip()
-            ]
+            instructions = [item.text.strip() for item in instructions_section.find_all(['li', 'p'])]
 
-        return Recipe(name=name, description=description, 
-                     ingredients=ingredients, instructions=instructions, 
-                     url=url)
+        return Recipe(name=name, description=description,
+                      ingredients=ingredients, instructions=instructions,
+                      url=url)
+
+    def _split_ingredient(self, ingredient: str) -> Ingredient:
+        """Attempt to split an ingredient into quantity, unit, and name."""
+        # Regular expression for ingredient parsing (you can refine it further)
+        pattern = r'(?P<quantity>[\d/.,\s]*)(?P<unit>[a-zA-Z]*)\s(?P<name>.*)'
+        match = re.match(pattern, ingredient)
+        if match:
+            quantity = match.group('quantity').strip() or None
+            unit = match.group('unit').strip() or None
+            name = match.group('name').strip()
+            return Ingredient(quantity=quantity, unit=unit, name=name)
+        return Ingredient(quantity=None, unit=None, name=ingredient)
+
+    def _valid_ingredient(self, ingredient: str) -> bool:
+        """Check if the ingredient is valid and not a serving size."""
+        serving_keywords = ['serving', 'serves', 'yields']
+        return not any(keyword in ingredient.lower() for keyword in serving_keywords)
+
 
 def parse_recipe_url(url: str) -> Recipe:
-    """
-    Convenience function to parse a recipe from a URL.
-    
-    Args:
-        url (str): The URL of the recipe to parse
-        
-    Returns:
-        Recipe: A Recipe object containing the parsed data
-        
-    Example:
-        recipe = parse_recipe_url('https://example.com/recipe')
-        print(f"Recipe: {recipe.name}")
-        print("\nIngredients:")
-        for ingredient in recipe.ingredients:
-            print(f"- {ingredient}")
-    """
     parser = RecipeParser()
     return parser.parse_recipe(url)
-
-
-if __name__ == "__main__":
-    # Replace with an actual recipe URL
-    url = "https://www.allrecipes.com/recipe/24074/alysias-basic-meat-lasagna/"
-    recipe = parse_recipe_url(url)
-
-    # Print out the parsed recipe
-    print(f"Recipe: {recipe.name}")
-    print(f"Description: {recipe.description}")
-    print("\nIngredients:")
-    for ingredient in recipe.ingredients:
-        print(f"- {ingredient}")
-    
-    print("\nInstructions:")
-    for instruction in recipe.instructions:
-        print(f"- {instruction}")
