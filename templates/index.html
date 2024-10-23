@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Parser</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Recipe Parser</h1>
+        <form method="POST" action="/parse">
+            <input type="text" name="recipe_url" placeholder="Enter recipe URL" required>
+            <button type="submit">Parse Recipe</button>
+        </form>
+
+        {% if recipe %}
+        <div class="recipe-display">
+            <h2>{{ recipe.name }}</h2>
+            <p><strong>Description:</strong> {{ recipe.description }}</p>
+            <h3>Ingredients</h3>
+            <ul>
+                {% for ingredient in recipe.ingredients %}
+                <li>{{ ingredient }}</li>
+                {% endfor %}
+            </ul>
+            <h3>Instructions</h3>
+            <ol>
+                {% for instruction in recipe.instructions %}
+                <li>{{ instruction }}</li>
+                {% endfor %}
+            </ol>
+        </div>
+        {% elif error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+    </div>
+</body>
+</html>
